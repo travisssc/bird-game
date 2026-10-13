@@ -6,8 +6,8 @@ Keep this file under ~150 lines: put detail in `docs/` and link to it.
 ## What this is
 A **multiplayer, third-person 3D bird game for desktop (PC)**. You play as a bird flying
 around a city. Think "The Isle", but as a bird: pick a species, fly, interact with other
-players' birds, and later eat food and steal it from humans. A real-world city map in the
-style of Microsoft Flight Simulator is a possible later goal.
+players' birds, and later eat food and steal it from humans. A **real-world city map** in the
+style of Microsoft Flight Simulator is a **core goal** (Cesium for Unreal; see DECISIONS.md).
 **V1 = flight mechanics only.** Gliding, flapping, tucking/diving and wind must feel
 satisfying. We iterate through many playtest rounds with the owner.
 Full vision and controls: [docs/VISION.md](docs/VISION.md). Current status and next steps:

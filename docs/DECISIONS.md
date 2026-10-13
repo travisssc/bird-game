@@ -51,3 +51,27 @@ Record each asset's source and license in `docs/ASSETS.md` when added.
 Sonnet by default. Opus for architecture, tricky bugs and risky changes, and for review
 subagents on large/risky diffs. Haiku subagents for high-volume, low-judgment work. Fable only
 when other models are stumped. Keep sessions short.
+
+## 2026-10-13 — Owner hardware
+RTX 3090, ~3 TB free disk. Enough for UE5 (including a source build if ever needed), Lumen/Nanite
+and Cesium tile streaming. Disk use is not a concern; still keep build output out of git.
+
+## 2026-10-13 — Real-world map is a CORE goal
+Flying over a real city (Microsoft Flight Simulator style) is core, not "someday".
+Plan: **Cesium for Unreal + Google Photorealistic 3D Tiles**, evaluated early (a spike right
+after the UE project exists) so flight is tuned in a representative environment.
+Things the spike must answer before we commit:
+- **Cost/licensing:** Google Map Tiles API needs a billing-enabled Google Cloud account, and
+  Cesium ion has free vs commercial tiers. Their terms restrict caching, attribution and
+  commercial use (which matters for Steam). **Ask the owner before creating any billing
+  account or API key.** Keys never go in git.
+- **Collision:** can birds land on and collide with streamed tile geometry reliably?
+- **Multiplayer:** the server also needs collision for the area players are in.
+- **Look:** photogrammetry tiles are photoreal, so how does that sit with the hybrid art
+  style and our bird models?
+Fallback if the terms or quality block us: a hand-built or procedurally generated city.
+The flight model must not depend on which world source is used.
+
+## 2026-10-13 — Controls (initial)
+Hold Space = glide, hold Left Click = flap, hold **Shift = tuck wings / dive** (confirmed by
+the owner), mouse = steer/camera. All bindings are via Enhanced Input so they stay remappable.

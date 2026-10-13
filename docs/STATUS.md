@@ -17,9 +17,13 @@ _Last updated: 2026-10-13 (setup session, cloud)_
    running them. Record anything surprising in the CLAUDE.md mistake log.
 4. Add a first Automation Spec test (a trivial one, to prove the pipeline) and run it headless.
 5. Find a free crow asset (record source + license in docs/ASSETS.md).
-6. Then propose a flight-model architecture to the owner before building it.
+6. Propose a flight-model architecture to the owner before building it. It must not depend on
+   the world source (tiles vs a hand-built city).
+
+## Soon after: Cesium real-world spike (core goal, see DECISIONS.md)
+Install Cesium for Unreal and check cost/licensing, collision, multiplayer implications and
+the look. **Ask the owner before creating any Google Cloud billing account or API key.**
 
 ## Open questions for the owner
-- PC specs: GPU and free disk space (UE5 plus the source build needs ~100 GB+).
-- Is the real-world map a core goal or a "someday"? (Affects when Cesium gets evaluated.)
-- Key for "tuck wings" (Shift is proposed).
+- None right now. (Answered 2026-10-13: RTX 3090 with 3 TB free; real-world map is core;
+  Shift = tuck.)

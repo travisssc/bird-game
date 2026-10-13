@@ -7,7 +7,7 @@ Owner's words, lightly organized. These are design intent, not implementation.
 - Like **"The Isle"** (survival as a dinosaur), but you're a bird. Pick your species.
 - The fun is **flying** and **interacting with other birds**.
 - Later: eat food on the ground, steal food out of NPC humans' hands.
-- Maybe: a real-world map, like Microsoft Flight Simulator.
+- **Core goal:** a real-world map, like Microsoft Flight Simulator (Cesium + Google 3D Tiles).
 - Look: a cartoon/realism hybrid, more real than cartoon. Not photorealistic.
 
 ## V1: flight mechanics (the only focus until it feels great)
@@ -17,7 +17,7 @@ Initial control proposal (to be tuned in playtests):
 | Mouse | Steer / look (camera-relative flight) |
 | Hold **Space** | Glide: wings spread, trade height for distance, slow sink |
 | Hold **Left Click** | Flap: gain lift/speed, costs stamina later |
-| Hold **Shift** (proposed; owner didn't specify) | Tuck wings: less drag, faster, dive |
+| Hold **Shift** | Tuck wings: less drag, faster, dive |
 | W/A/S/D (proposed) | Pitch/roll fine control, or walking on the ground |
 
 Physics/feel goals:
