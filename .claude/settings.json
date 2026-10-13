@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git checkout*)",
+      "Bash(git switch*)",
+      "Bash(git branch*)",
+      "Bash(git worktree*)",
+      "Bash(git fetch*)",
+      "Bash(git pull*)",
+      "Bash(git push -u origin*)",
+      "Bash(git stash*)",
+      "Bash(git lfs*)",
+      "Bash(*Build.bat*)",
+      "Bash(*UnrealEditor-Cmd.exe*)",
+      "Bash(*UnrealEditor.exe*)",
+      "Bash(*RunUAT.bat*)",
+      "Bash(ls*)",
+      "Bash(cat*)",
+      "Bash(grep*)",
+      "Bash(find*)",
+      "Bash(tail*)",
+      "Bash(head*)",
+      "Bash(mkdir*)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)"
+    ]
+  }
+}

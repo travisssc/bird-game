@@ -1,0 +1,36 @@
+# Unreal build output / caches (never commit)
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+Plugins/**/Binaries/
+Plugins/**/Intermediate/
+Build/Win64/
+Build/*/PakBlacklist*.txt
+
+# IDE / generated project files
+.vs/
+.vscode/
+.idea/
+*.sln
+*.suo
+*.sdf
+*.opensdf
+*.opendb
+*.VC.db
+*.vcxproj*
+*.xcodeproj
+*.xcworkspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local-only Claude settings and scratch
+.claude/settings.local.json
+scratch/
+
+# Secrets
+.env
+*.pem
