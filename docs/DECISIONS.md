@@ -75,6 +75,7 @@ The flight model must not depend on which world source is used.
 ## 2026-10-13 — Controls (initial)
 Hold Space = glide, hold Left Click = flap, hold **Shift = tuck wings / dive** (confirmed by
 the owner), mouse = steer/camera. All bindings are via Enhanced Input so they stay remappable.
+(Hold Alt = free look was added 2026-10-15, see below.)
 
 ## 2026-10-15 — City: build our own (supersedes the Cesium/Google Tiles plan above)
 **Decision:** we drop Cesium + Google Photorealistic 3D Tiles. The game world is a city we build.
@@ -108,3 +109,22 @@ fully custom pawn, which would mean writing prediction ourselves.)
 ## 2026-10-15 — Multiplayer target (near term)
 Small sessions with a friend or two on a local/listen server. No dedicated servers, accounts or
 matchmaking for now.
+
+## 2026-10-15 — Owner answers: free look, wind as a core mechanic, flight feel
+(Answers to the open questions in FLIGHT_MODEL.md; owner priorities: feel like a real bird, but
+fun and satisfying mechanics come first.)
+- **Free look: hold Alt** to look around without changing course. Only the bird's head turns;
+  the camera swings back on release. Implemented in `LookControl.h`.
+- **Wind is a core mechanic.** You can't glide without wind or speed (airspeed is speed through
+  the air), and the world always has wind (`CityBreeze()`). Buildings make ridge lift and
+  sheltered, turbulent wakes. Wind must be **visible as little translucent streaks** through the
+  sky (`WindStreaks.h`).
+- **Glide trim on by default** (owner: "whatever feels best, realistic"). Real birds trim
+  themselves, so looking level flies the best glide. `GlideTrimAssist` is the A/B lever.
+- **g-cap: yes, 7 g.** Weighty but not sluggish (owner: realism, but fun first, "not too
+  weighty"). `MaxLoadFactor` is the lever.
+- **Bank from the flight path: on by default** (owner unsure, wants to test). Measured: banking
+  from the nose's turn rate left the path 5° off ~2.9 s into a 90° turn. Banking from the
+  nose-vs-path gap lines it up in ~1.5 s with no overshoot. Added turn stall protection so
+  camera flicks don't stall the bird mid-turn. `BankTrackBlend` 0/1 is the A/B for the playtest.
+- **Flap beats tuck** when both are held: kept.

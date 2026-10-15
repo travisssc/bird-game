@@ -110,5 +110,28 @@ int main()
 	Gusty.GustStrengthMps = 3.0;
 	Run("glide_gusty", Cruise(11.0, 100.0), Glide, 1, &Gusty);
 
+	// Tucked dive to ~60 m/s, then look level: the pull-out carves at the 7 g cap.
+	const FPhase DivePullout[] = {
+		{ 8.0, Make(Dir(-89.0, 0.0), false, false, true) },
+		{ 8.0, Make(Dir(0.0, 0.0), true, false, false) } };
+	Run("tucked_dive_7g_pullout", Cruise(10.0, 400.0), DivePullout, 2);
+
+	// Facing into 8 m/s of wind just upwind of a 40 m building: hangs in the ridge lift.
+	FWindObstacle Building;
+	Building.HalfLengthX = 15.0;
+	Building.HalfWidthY = 40.0;
+	Building.Height = 40.0;
+	FWindParams Ridge;
+	Ridge.BaseWind = FVec3(8.0, 0.0, 0.0);
+	Ridge.Obstacles = &Building;
+	Ridge.NumObstacles = 1;
+	FFlightState Hang;
+	Hang.Position = FVec3(-25.0, 0.0, 44.0);
+	Hang.Velocity = FVec3(-1.0, 0.0, 0.0);
+	Hang.Forward = FVec3(-1.0, 0.0, 0.0);
+	Hang.WingExtension = 1.0;
+	const FPhase HangPhase[] = { { 30.0, Make(Dir(0.0, 180.0), true, false, false) } };
+	Run("hang_in_building_updraft", Hang, HangPhase, 1, &Ridge);
+
 	return 0;
 }

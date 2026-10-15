@@ -126,3 +126,7 @@ so no future session repeats it.
 - 2026-10-15: In the flight core, don't name anything `PI`, `check`, `verify` or `ensure`: Unreal
   defines these as macros. Use `BirdFlight::Pi`, and write `(std::min)(a, b)` because of Windows
   macros. GCC rejects `FVec3()` as a default argument inside FVec3 itself (use an overload).
+- 2026-10-15: When a chart shows something physically odd, check the chart before the physics.
+  Unclipped SVG panels overlapped and looked like wind streaks inside a building.
+- 2026-10-15: Feel changes interact. Holding the bank longer made fast camera flicks stall
+  mid-turn (yaw in a bank raises the AoA). Re-run every turn/stall test after any orientation change.

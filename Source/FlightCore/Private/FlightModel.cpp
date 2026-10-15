@@ -1,5 +1,6 @@
 #include "FlightCore/FlightModel.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace BirdFlight
@@ -68,6 +69,18 @@ namespace BirdFlight
 			}
 		}
 
+		// Largest angle (radians) the nose may sit off the oncoming air before the wings and tail
+		// would exceed the load-factor cap, using the linear (pre-stall) force slopes. Above the
+		// corner speed this is smaller than the stall angle; below it the cap never binds.
+		double MaxNoseOffAirflowRad(const FFlightParams& Params, double Extension, double Airspeed)
+		{
+			const double Q = 0.5 * Params.AirDensity * Airspeed * Airspeed;
+			const double ForcePerRad = Q * (Params.WingAreaM2 * Extension * Params.LiftSlopePerRad
+				+ Params.SideForceAreaM2PerRad);
+			const double MaxForce = Params.MaxLoadFactor * Params.MassKg * Params.Gravity;
+			return ForcePerRad > TinyNumber ? MaxForce / ForcePerRad : Pi;
+		}
+
 		void UpdateOrientation(FFlightState& State, const FFlightInput& Input, const FFlightParams& Params,
 			const FVec3& Wind, double Dt)
 		{
@@ -78,7 +91,8 @@ namespace BirdFlight
 
 			// A stalled bird can't hold its nose up: it drops toward the oncoming air, which is
 			// also how a stall recovers. Flapping overrides this (birds can flap out of a stall).
-			if (!Input.bFlap && IsStalled(Params, AngleOfAttack(State, AirVelocity), Airspeed))
+			const bool bStalled = IsStalled(Params, AngleOfAttack(State, AirVelocity), Airspeed);
+			if (!Input.bFlap && bStalled)
 			{
 				const FVec3 AirDirection = AirVelocity / Airspeed;
 				Aim = (Aim * (1.0 - Params.StallNoseDrop) + AirDirection * Params.StallNoseDrop).GetSafeNormal(Aim);
@@ -95,7 +109,19 @@ namespace BirdFlight
 			const double OldPitch = std::asin(Clamp(State.Forward.Z, -1.0, 1.0));
 			const double AimHorizontal = std::sqrt(Aim.X * Aim.X + Aim.Y * Aim.Y);
 			const double AimYaw = AimHorizontal > 1e-3 ? std::atan2(Aim.Y, Aim.X) : OldYaw;
-			const double AimPitch = Clamp(std::asin(Clamp(Aim.Z, -1.0, 1.0)), -MaxPitchRad, MaxPitchRad);
+			double AimPitch = std::asin(Clamp(Aim.Z, -1.0, 1.0));
+
+			// Glide trim: a gliding bird holds its best-glide attitude when the player looks at the
+			// horizon, fading out as the aim moves away from level (so dives and climbs still work).
+			// Monotonic in the aim as long as the trim is smaller than the fade angle.
+			if (!Input.bFlap && !Input.bTuck && !bStalled && Params.GlideTrimAssist > 0.0)
+			{
+				const double Fade = std::fmax(Params.GlideTrimFadeDeg * DegToRad, 1e-3);
+				const double Weight = Clamp(1.0 - std::fabs(AimPitch) / Fade, 0.0, 1.0);
+				const double Trim = Clamp(GetBestGlidePitchRad(Params, State.WingExtension), -0.5 * Fade, 0.5 * Fade);
+				AimPitch += Params.GlideTrimAssist * Trim * Weight;
+			}
+			AimPitch = Clamp(AimPitch, -MaxPitchRad, MaxPitchRad);
 
 			const double YawDelta = WrapAngle(AimYaw - OldYaw);
 			const double PitchDelta = AimPitch - OldPitch;
@@ -105,14 +131,83 @@ namespace BirdFlight
 			const double MaxArc = TurnRate * Dt;
 			const double StepFraction = ArcToAim > MaxArc ? MaxArc / ArcToAim : 1.0;
 
-			const double NewYaw = OldYaw + YawDelta * StepFraction;
-			const double NewPitch = Clamp(OldPitch + PitchDelta * StepFraction, -MaxPitchRad, MaxPitchRad);
-			const double YawRate = YawDelta * StepFraction / Dt;
+			double NewYaw = OldYaw + YawDelta * StepFraction;
+			double NewPitch = Clamp(OldPitch + PitchDelta * StepFraction, -MaxPitchRad, MaxPitchRad);
 
-			// Coordinated-turn bank: tan(bank) = v * yawRate / g.
+			// Load-factor cap: at high speed even a small angle to the airflow makes a huge force, so
+			// the nose is held within the angle that produces MaxLoadFactor. The flight path then
+			// bends at that g and the nose rides along it (a carved pull-out, not a snap).
+			if (Airspeed > 1.0)
+			{
+				const double MaxOff = MaxNoseOffAirflowRad(Params, State.WingExtension, Airspeed);
+				if (MaxOff < GetStallAngleRad(Params))
+				{
+					const double CY = std::cos(NewYaw), SY = std::sin(NewYaw);
+					const double CP = std::cos(NewPitch), SP = std::sin(NewPitch);
+					const FVec3 Candidate(CP * CY, CP * SY, SP);
+					const FVec3 AirDirection = AirVelocity / Airspeed;
+					if (std::acos(Clamp(Dot(Candidate, AirDirection), -1.0, 1.0)) > MaxOff)
+					{
+						const FVec3 Limited = RotateToward(AirDirection, Candidate, MaxOff, State.GetRight());
+						const double LimitedHorizontal = std::sqrt(Limited.X * Limited.X + Limited.Y * Limited.Y);
+						if (LimitedHorizontal > 1e-3)
+						{
+							NewYaw = OldYaw + WrapAngle(std::atan2(Limited.Y, Limited.X) - OldYaw);
+						}
+						NewPitch = Clamp(std::asin(Clamp(Limited.Z, -1.0, 1.0)), -MaxPitchRad, MaxPitchRad);
+					}
+				}
+			}
+			// Bank like a coordinated turn: tan(bank) = v * turnRate / g. The turn rate is a blend of
+			// the nose's yaw rate (bank only while the nose swings) and the rate the flight path must
+			// turn to catch up with the nose (bank until the path has caught up, so the end of a turn
+			// carves like a bike leaning out of a corner instead of skidding flat).
+			const double AirHorizontal = std::sqrt(AirVelocity.X * AirVelocity.X + AirVelocity.Y * AirVelocity.Y);
+			const bool bTrackBank = Params.BankTrackBlend > 0.0 && AirHorizontal > 1.0;
+			const double TrackYaw = bTrackBank ? std::atan2(AirVelocity.Y, AirVelocity.X) : 0.0;
 			const double MaxBank = Params.MaxBankDeg * DegToRad;
-			const double DesiredBank = Clamp(std::atan(Airspeed * YawRate / Params.Gravity), -MaxBank, MaxBank);
-			State.BankRad = MoveToward(State.BankRad, DesiredBank, Params.BankRateDegPerSec * DegToRad * Dt);
+			const double MaxBankStep = Params.BankRateDegPerSec * DegToRad * Dt;
+			auto BankForYaw = [&](double Yaw)
+			{
+				double TurnRateForBank = WrapAngle(Yaw - OldYaw) / Dt;
+				if (bTrackBank)
+				{
+					const double CatchUpRate = WrapAngle(Yaw - TrackYaw) / Params.BankTrackTimeSec;
+					TurnRateForBank = Lerp(TurnRateForBank, CatchUpRate, Params.BankTrackBlend);
+				}
+				const double Desired = Clamp(std::atan(Airspeed * TurnRateForBank / Params.Gravity), -MaxBank, MaxBank);
+				return MoveToward(State.BankRad, Desired, MaxBankStep);
+			};
+
+			// Turn stall protection: yawing the nose ahead of the flight path in a bank raises the
+			// wing's angle of attack, and a 150 deg/s camera flick would stall the bird mid-turn. A
+			// real bird turns wider instead, so the yaw step is shortened to keep the wing below the
+			// stall. Pitching up can still stall the bird; only the turn is protected.
+			if (Airspeed > 1.0 && WrapAngle(NewYaw - OldYaw) != 0.0)
+			{
+				auto AlphaForYaw = [&](double Yaw)
+				{
+					const double Bank = BankForYaw(Yaw);
+					const double CY = std::cos(Yaw), SY = std::sin(Yaw);
+					const double CP = std::cos(NewPitch), SP = std::sin(NewPitch);
+					const FVec3 Fwd(CP * CY, CP * SY, SP);
+					const FVec3 Up = FVec3(-SP * CY, -SP * SY, CP) * std::cos(Bank) + FVec3(-SY, CY, 0.0) * std::sin(Bank);
+					return std::fabs(std::atan2(-Dot(AirVelocity, Up), Dot(AirVelocity, Fwd)));
+				};
+				const double Protect = (std::max)(Params.TurnStallMargin * GetStallAngleRad(Params), AlphaForYaw(OldYaw));
+				const double FullStep = WrapAngle(NewYaw - OldYaw);
+				if (AlphaForYaw(NewYaw) > Protect)
+				{
+					double Lo = 0.0, Hi = 1.0;
+					for (int i = 0; i < 10; ++i)
+					{
+						const double Mid = 0.5 * (Lo + Hi);
+						(AlphaForYaw(OldYaw + FullStep * Mid) > Protect ? Hi : Lo) = Mid;
+					}
+					NewYaw = OldYaw + FullStep * Lo;
+				}
+			}
+			State.BankRad = BankForYaw(NewYaw);
 
 			// Exact orthonormal frame from yaw/pitch, then roll Up toward Right by the bank angle.
 			const double CY = std::cos(NewYaw), SY = std::sin(NewYaw);
@@ -137,17 +232,33 @@ namespace BirdFlight
 				const FVec3 AirDirection = AirVelocity / Airspeed;
 				const FVec3 Right = State.GetRight();
 				const double Alpha = AngleOfAttack(State, AirVelocity);
-				const double CL = ComputeLiftCoeff(Params, Alpha);
+				double CL = ComputeLiftCoeff(Params, Alpha);
 				const double Q = 0.5 * Params.AirDensity * Airspeed * Airspeed;
 				const double WingArea = Params.WingAreaM2 * Extension;
-
-				T.AngleOfAttackRad = Alpha;
-				T.LiftCoeff = CL;
-				T.bStalled = IsStalled(Params, Alpha, Airspeed);
 
 				// Lift: perpendicular to the airflow, on the bird's "up" side.
 				const FVec3 LiftDir = (State.Up - AirDirection * Dot(State.Up, AirDirection)).GetSafeNormal();
 				T.LiftForce = LiftDir * (Q * WingArea * CL);
+
+				// Side force from tail/body: opposes sideslip so velocity follows the heading.
+				const double Sideslip = std::atan2(Dot(AirVelocity, Right), std::fabs(Dot(AirVelocity, State.Forward)));
+				FVec3 SideForce = Right * (-Q * Params.SideForceAreaM2PerRad * Sideslip);
+
+				// Load-factor cap (backstop for the orientation limit): the bird eases its wings
+				// rather than pull more than MaxLoadFactor. Induced drag follows the eased lift.
+				const double MaxPerpForce = Params.MaxLoadFactor * Params.MassKg * Params.Gravity;
+				const double PerpForce = (T.LiftForce + SideForce).Size();
+				if (PerpForce > MaxPerpForce)
+				{
+					const double Ease = MaxPerpForce / PerpForce;
+					T.LiftForce *= Ease;
+					SideForce *= Ease;
+					CL *= Ease;
+				}
+
+				T.AngleOfAttackRad = Alpha;
+				T.LiftCoeff = CL;
+				T.bStalled = IsStalled(Params, Alpha, Airspeed);
 
 				// Drag: profile + induced + flat-plate on the wings, plus the body. Flat-plate drag
 				// models separated flow, so it blends in only past the stall angle.
@@ -159,10 +270,6 @@ namespace BirdFlight
 				const double DragMag = Q * (WingArea * (Params.WingParasiticDragCoeff + InducedCD + FlatPlateCD)
 					+ Params.BodyDragAreaM2);
 				T.DragForce = AirDirection * -DragMag;
-
-				// Side force from tail/body: opposes sideslip so velocity follows the heading.
-				const double Sideslip = std::atan2(Dot(AirVelocity, Right), std::fabs(Dot(AirVelocity, State.Forward)));
-				const FVec3 SideForce = Right * (-Q * Params.SideForceAreaM2PerRad * Sideslip);
 
 				T.TotalForce = T.LiftForce + T.DragForce + SideForce;
 			}
@@ -181,6 +288,7 @@ namespace BirdFlight
 				T.TotalForce += T.ThrustForce;
 			}
 
+			T.LoadFactor = T.TotalForce.Size() / (Params.MassKg * std::fmax(Params.Gravity, TinyNumber));
 			return T;
 		}
 	}
@@ -188,6 +296,22 @@ namespace BirdFlight
 	double GetStallAngleRad(const FFlightParams& Params)
 	{
 		return Params.MaxLiftCoeff / Params.LiftSlopePerRad;
+	}
+
+	double GetBestGlidePitchRad(const FFlightParams& Params, double WingExtension)
+	{
+		// Best glide is where profile drag equals induced drag: CL = sqrt(CD0 / k).
+		const double WingArea = Params.WingAreaM2 * Clamp(WingExtension, 0.0, 1.0);
+		if (WingArea < 1e-6)
+		{
+			return 0.0;
+		}
+		const double K = 1.0 / (Pi * Params.AspectRatio * Params.OswaldEfficiency);
+		const double CD0 = Params.WingParasiticDragCoeff + Params.BodyDragAreaM2 / WingArea;
+		const double CL = (std::min)(std::sqrt(CD0 / K), 0.85 * Params.MaxLiftCoeff);
+		const double Alpha = CL / Params.LiftSlopePerRad;
+		const double GlideAngle = std::atan((CD0 + K * CL * CL) / CL);
+		return Alpha - GlideAngle;
 	}
 
 	double ComputeLiftCoeff(const FFlightParams& Params, double AngleOfAttackRad)
@@ -274,6 +398,12 @@ namespace BirdFlight
 		P.MaxBankDeg = Clamp(FiniteOr(P.MaxBankDeg, 65.0), 0.0, 85.0);
 		P.BankRateDegPerSec = std::fmax(FiniteOr(P.BankRateDegPerSec, 240.0), 0.0);
 		P.StallNoseDrop = Clamp(FiniteOr(P.StallNoseDrop, 0.6), 0.0, 1.0);
+		P.MaxLoadFactor = std::fmax(FiniteOr(P.MaxLoadFactor, 7.0), 1.5);
+		P.GlideTrimAssist = Clamp(FiniteOr(P.GlideTrimAssist, 1.0), 0.0, 1.0);
+		P.GlideTrimFadeDeg = Clamp(FiniteOr(P.GlideTrimFadeDeg, 30.0), 1.0, 89.0);
+		P.BankTrackBlend = Clamp(FiniteOr(P.BankTrackBlend, 1.0), 0.0, 1.0);
+		P.BankTrackTimeSec = std::fmax(FiniteOr(P.BankTrackTimeSec, 0.25), 0.05);
+		P.TurnStallMargin = Clamp(FiniteOr(P.TurnStallMargin, 0.9), 0.1, 2.0);
 		P.MaxSubstepSec = Clamp(FiniteOr(P.MaxSubstepSec, 1.0 / 120.0), 1e-4, 0.1);
 		P.MaxStepSec = std::fmax(FiniteOr(P.MaxStepSec, 0.25), P.MaxSubstepSec);
 	}

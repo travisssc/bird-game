@@ -19,13 +19,15 @@ Initial control proposal (to be tuned in playtests):
 | Hold **Space** | Glide: wings spread, trade height for distance, slow sink |
 | Hold **Left Click** | Flap: gain lift/speed, costs stamina later |
 | Hold **Shift** | Tuck wings: less drag, faster, dive |
+| Hold **Alt** | Free look: look around without changing course; only the head turns |
 | W/A/S/D (proposed) | Pitch/roll fine control, or walking on the ground |
 
 Physics/feel goals:
 - Momentum and energy: diving builds speed, pulling up trades speed for height.
 - Banking turns. Stall when too slow. Landing and takeoff.
-- **Wind**: physical (gusts, updrafts/thermals off buildings, turbulence) **and visual**
-  (particles/streaks, feathers/foliage responding, speed lines when diving).
+- **Wind is a core mechanic** (owner, 2026-10-15): you can't glide without some wind or speed.
+  Physical (gusts, updrafts/thermals off buildings, turbulence) **and visual**: little
+  translucent streaks through the sky, plus feathers/foliage responding and speed lines when diving.
 - A third-person camera that conveys speed (FOV, lag, shake when diving).
 
 Ideas to raise with the owner as we go (not committed): stamina, thermals to circle in,

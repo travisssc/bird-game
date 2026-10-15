@@ -54,6 +54,14 @@ namespace BirdFlight
 		double BankRateDegPerSec = 240.0;
 		double StallNoseDrop = 0.6;           // 0..1, how strongly a stall pulls the nose toward the airflow
 
+		// --- Feel (decided by playtest; see docs/FLIGHT_MODEL.md) ---
+		double MaxLoadFactor = 7.0;           // g cap on aerodynamic force; fast pull-outs carve instead of snapping
+		double GlideTrimAssist = 1.0;         // 0..1: aiming level while gliding holds best-glide attitude
+		double GlideTrimFadeDeg = 30.0;       // trim fades out as the aim moves this far from level
+		double BankTrackBlend = 1.0;          // 0 = bank from the nose's turn rate, 1 = from the nose-vs-path gap
+		double BankTrackTimeSec = 0.25;       // how fast the path is expected to catch up with the nose
+		double TurnStallMargin = 0.9;         // turning can't push AoA past this fraction of stall (>1 disables)
+
 		// --- Integration ---
 		double MaxSubstepSec = 1.0 / 120.0;
 		double MaxStepSec = 0.25;             // longer frames are clamped (hitch protection)
@@ -88,6 +96,7 @@ namespace BirdFlight
 		double AngleOfAttackRad = 0.0;
 		double LiftCoeff = 0.0;
 		bool bStalled = false;
+		double LoadFactor = 0.0;              // felt g: |non-gravity force| / (m*g); 1 in a steady glide
 		FVec3 LiftForce;
 		FVec3 DragForce;
 		FVec3 ThrustForce;
@@ -101,6 +110,10 @@ namespace BirdFlight
 	// Aerodynamic coefficient curve (exposed for tests and tuning tools).
 	double ComputeLiftCoeff(const FFlightParams& Params, double AngleOfAttackRad);
 	double GetStallAngleRad(const FFlightParams& Params);
+
+	// Nose pitch above the horizon (radians) that flies the best glide ratio at the given wing
+	// extension. The glide trim assist steers here when the player aims level.
+	double GetBestGlidePitchRad(const FFlightParams& Params, double WingExtension);
 
 	// One substep for callers that move and collide themselves (the Unreal CharacterMovementComponent
 	// flying mode): updates wings, orientation and velocity but NOT position. The caller then sweeps

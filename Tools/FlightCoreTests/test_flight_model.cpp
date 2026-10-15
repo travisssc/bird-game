@@ -463,3 +463,209 @@ TEST_CASE("UpdateVelocityAndOrientation + caller-side move matches Step (the CMC
 	CHECK(A.Position.Z == B.Position.Z);
 	CHECK(A.Velocity.Y == B.Velocity.Y);
 }
+
+TEST_CASE("Pulling out of a tucked dive is capped near MaxLoadFactor and still carves back to level")
+{
+	FFlightParams P;
+	FFlightState S = CruiseState(10.0, 3000.0);
+	FFlightInput In;
+	In.bTuck = true;
+	In.AimDirection = FVec3(0.0, 0.0, -1.0);
+	Simulate(S, In, P, 25.0);
+	REQUIRE(S.Velocity.Size() > 50.0);
+
+	In.bTuck = false;
+	In.bGlide = true;
+	In.AimDirection = DirFromPitchYawDeg(0.0, 0.0);
+	double PeakG = 0.0;
+	double LevelTime = -1.0;
+	Simulate(S, In, P, 6.0, nullptr, [&](double Time, const FFlightTelemetry& T, FFlightState& St, FFlightInput&) {
+		PeakG = std::max(PeakG, T.LoadFactor);
+		if (LevelTime < 0.0 && St.Velocity.Z > -1.0)
+		{
+			LevelTime = Time;
+		}
+	});
+	CAPTURE(PeakG);
+	CAPTURE(LevelTime);
+	CHECK(PeakG <= P.MaxLoadFactor * 1.05);
+	CHECK(PeakG > P.MaxLoadFactor * 0.8); // the cap is actually reached: a hard but weighty pull
+	CHECK(LevelTime > 1.0);               // not near-instant (uncapped it was ~0.7 s at ~19 g)
+	CHECK(LevelTime < 2.5);               // but not sluggish either
+}
+
+TEST_CASE("Glide trim assist: aiming level flies the best glide ratio; off = nose level")
+{
+	// Theoretical best glide ratio for the crow defaults: L/D max = 1 / (2 sqrt(CD0 * k)).
+	FFlightParams P;
+	const double K = 1.0 / (Pi * P.AspectRatio * P.OswaldEfficiency);
+	const double CD0 = P.WingParasiticDragCoeff + P.BodyDragAreaM2 / P.WingAreaM2;
+	const double BestRatio = 1.0 / (2.0 * std::sqrt(CD0 * K));
+
+	auto GlideRatio = [&](double Assist, double* OutPitchDeg) {
+		FFlightParams Q = P;
+		Q.GlideTrimAssist = Assist;
+		FFlightState S = CruiseState(11.0, 500.0);
+		FFlightInput In;
+		In.bGlide = true;
+		Simulate(S, In, Q, 10.0);
+		const FVec3 Start = S.Position;
+		Simulate(S, In, Q, 20.0);
+		*OutPitchDeg = std::asin(S.Forward.Z) * 180.0 / Pi;
+		return (S.Position.X - Start.X) / (Start.Z - S.Position.Z);
+	};
+	double PitchOn = 0.0, PitchOff = 0.0;
+	const double On = GlideRatio(1.0, &PitchOn);
+	const double Off = GlideRatio(0.0, &PitchOff);
+	CAPTURE(BestRatio);
+	CAPTURE(On);
+	CAPTURE(Off);
+	CHECK(On == doctest::Approx(BestRatio).epsilon(0.03));
+	CHECK(Off < On);
+	CHECK(PitchOff == doctest::Approx(0.0).epsilon(0.01));
+	CHECK(PitchOn == doctest::Approx(GetBestGlidePitchRad(P, 1.0) * 180.0 / Pi).epsilon(0.05));
+}
+
+TEST_CASE("Glide trim keeps the aim-to-pitch mapping monotonic and leaves steep aims alone")
+{
+	const FFlightParams P;
+	double LastPitch = -1e9;
+	for (double AimDeg = -40.0; AimDeg <= 40.0; AimDeg += 2.0)
+	{
+		FFlightState S = CruiseState(11.0, 500.0);
+		FFlightInput In;
+		In.bGlide = true;
+		In.AimDirection = DirFromPitchYawDeg(AimDeg, 0.0);
+		// Hold the velocity along the nose so speed and stall can't move it: this reads only
+		// where the controller points the nose for each aim.
+		for (int i = 0; i < 60; ++i)
+		{
+			S.Velocity = S.Forward * 11.0;
+			Step(S, In, P, FVec3(), FrameDt);
+		}
+		const double Pitch = std::asin(S.Forward.Z) * 180.0 / Pi;
+		CAPTURE(AimDeg);
+		CHECK(Pitch > LastPitch);
+		if (std::fabs(AimDeg) >= P.GlideTrimFadeDeg)
+		{
+			CHECK(Pitch == doctest::Approx(AimDeg).epsilon(0.01));
+		}
+		LastPitch = Pitch;
+	}
+}
+
+TEST_CASE("Banked turns carve: the flight path catches up with the nose instead of skidding")
+{
+	// 90 deg turn at glide speed. Banking from the nose-vs-path gap holds the bank until the
+	// path has caught up; banking only from the nose's yaw rate rolls level too early and leaves
+	// the bird skidding sideways for seconds.
+	auto TimeToAlign = [](double Blend) {
+		FFlightParams P;
+		P.BankTrackBlend = Blend;
+		FFlightState S = CruiseState(12.0, 500.0);
+		FFlightInput In;
+		In.bGlide = true;
+		In.AimDirection = DirFromPitchYawDeg(0.0, 90.0);
+		double Aligned = -1.0;
+		double Overshoot = 0.0;
+		Simulate(S, In, P, 6.0, nullptr, [&](double Time, const FFlightTelemetry&, FFlightState& St, FFlightInput&) {
+			const double TrackDeg = std::atan2(St.Velocity.Y, St.Velocity.X) * 180.0 / Pi;
+			if (Aligned < 0.0 && std::fabs(TrackDeg - 90.0) < 2.0)
+			{
+				Aligned = Time;
+			}
+			Overshoot = std::max(Overshoot, TrackDeg - 90.0);
+		});
+		CHECK(Overshoot < 3.0);
+		return Aligned < 0.0 ? 99.0 : Aligned;
+	};
+	const double Carve = TimeToAlign(1.0);
+	const double Skid = TimeToAlign(0.0);
+	CAPTURE(Carve);
+	CAPTURE(Skid);
+	CHECK(Carve < 2.0);
+	CHECK(Skid > Carve + 1.0);
+}
+
+TEST_CASE("Flick turns at glide speed never stall the bird (turn stall protection)")
+{
+	const FFlightParams P;
+	const double AimYaws[] = { 60.0, 120.0, 179.0, -150.0 };
+	for (double AimYaw : AimYaws)
+	{
+		CAPTURE(AimYaw);
+		FFlightState S = CruiseState(10.0, 300.0);
+		FFlightInput In;
+		In.bGlide = true;
+		In.AimDirection = DirFromPitchYawDeg(0.0, AimYaw);
+		bool SawStall = false;
+		Simulate(S, In, P, 4.0, nullptr,
+			[&](double, const FFlightTelemetry& T, FFlightState&, FFlightInput&) { SawStall |= T.bStalled; });
+		CHECK_FALSE(SawStall);
+		CHECK(Dot(S.Forward, In.AimDirection) > 0.98);
+	}
+}
+
+TEST_CASE("Wind is what lets a bird glide slowly: hanging in a building's updraft vs calm air")
+{
+	// Facing into an 8 m/s wind just upwind of a 40 m slab, the bird has glide airspeed with
+	// almost no ground speed, and the ridge lift holds it up: it hangs there like a gull on a
+	// cliff. The same glide in calm air sinks steadily and travels far.
+	FWindObstacle Building;
+	Building.HalfLengthX = 15.0;
+	Building.HalfWidthY = 40.0;
+	Building.Height = 40.0;
+	auto Hang = [&](double WindSpeed, double* OutGroundTravel) {
+		FWindParams W;
+		W.BaseWind = FVec3(WindSpeed, 0.0, 0.0);
+		W.Obstacles = &Building;
+		W.NumObstacles = 1;
+		FFlightParams P;
+		FFlightState S;
+		S.Position = FVec3(-25.0, 0.0, 44.0);
+		S.Velocity = FVec3(-1.0, 0.0, 0.0);
+		S.Forward = FVec3(-1.0, 0.0, 0.0);
+		S.WingExtension = 1.0;
+		FFlightInput In;
+		In.bGlide = true;
+		In.AimDirection = FVec3(-1.0, 0.0, 0.0);
+		Simulate(S, In, P, 20.0, &W);
+		*OutGroundTravel = std::fabs(S.Position.X + 25.0);
+		return S.Position.Z - 44.0;
+	};
+	double TravelWindy = 0.0, TravelCalm = 0.0;
+	const double ClimbWindy = Hang(8.0, &TravelWindy);
+	const double ClimbCalm = Hang(0.0, &TravelCalm);
+	CAPTURE(ClimbWindy);
+	CAPTURE(TravelWindy);
+	CAPTURE(ClimbCalm);
+	CHECK(ClimbWindy > 5.0);
+	CHECK(TravelWindy < 25.0);
+	CHECK(ClimbCalm < -10.0);
+	CHECK(TravelCalm > 100.0);
+}
+
+TEST_CASE("Without wind or speed there's no glide: a slow bird in calm air stalls and drops")
+{
+	const FFlightParams P;
+	FFlightState S = CruiseState(3.0, 300.0);
+	FFlightInput In;
+	In.bGlide = true;
+	bool SawStall = false;
+	double MinVz = 0.0;
+	Simulate(S, In, P, 2.0, nullptr, [&](double, const FFlightTelemetry& T, FFlightState& St, FFlightInput&) {
+		SawStall |= T.bStalled;
+		MinVz = std::min(MinVz, St.Velocity.Z);
+	});
+	CHECK(SawStall);
+	CHECK(MinVz < -4.0); // has to dive to get airspeed back
+
+	// The same slow ground speed into an 8 m/s headwind is a comfortable glide.
+	FFlightState Windy = CruiseState(0.5, 300.0);
+	FWindParams Headwind;
+	Headwind.BaseWind = FVec3(-8.0, 0.0, 0.0);
+	bool WindyStall = false;
+	Simulate(Windy, In, P, 10.0, &Headwind,
+		[&](double, const FFlightTelemetry& T, FFlightState&, FFlightInput&) { WindyStall |= T.bStalled; });
+	CHECK_FALSE(WindyStall);
+}

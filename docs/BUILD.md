@@ -7,7 +7,10 @@ cmake --build build/flightcore
 ./build/flightcore/flightcore_tests            # all tests; add -s for details
 ./build/flightcore/flight_lab > build/lab.csv  # scripted flights
 python3 Tools/FlightCoreTests/plot_lab.py build/lab.csv docs/img/flight_lab.svg
+./build/flightcore/wind_lab > docs/img/wind_streaks.svg   # visible-wind preview
 ```
+To look at an SVG without a browser (cloud sessions): run Chromium headless,
+`/opt/pw-browsers/chromium-*/chrome-linux/chrome --headless --no-sandbox --screenshot=out.png --window-size=800,1000 file://$PWD/docs/img/wind_streaks.svg`.
 Warnings are errors (`-Wshadow -Wconversion`, etc.) to approximate Unreal's strictness.
 Also worth running occasionally: clang (`CXX=clang++`) and gcc with
 `-DCMAKE_CXX_FLAGS="-fsanitize=address,undefined"` (clang's sanitizer runtime is missing in the

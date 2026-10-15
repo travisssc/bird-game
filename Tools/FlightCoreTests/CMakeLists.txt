@@ -14,7 +14,9 @@ set(CORE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../Source/FlightCore)
 # The core library: everything in Private/ except Unreal module boilerplate.
 add_library(flightcore STATIC
   ${CORE_DIR}/Private/FlightModel.cpp
-  ${CORE_DIR}/Private/WindField.cpp)
+  ${CORE_DIR}/Private/WindField.cpp
+  ${CORE_DIR}/Private/LookControl.cpp
+  ${CORE_DIR}/Private/WindStreaks.cpp)
 target_include_directories(flightcore PUBLIC ${CORE_DIR}/Public)
 
 # Strict warnings approximating Unreal's (shadowing and conversions are errors there).
@@ -29,7 +31,9 @@ add_executable(flightcore_tests
   test_main.cpp
   test_math.cpp
   test_flight_model.cpp
-  test_wind.cpp)
+  test_wind.cpp
+  test_look.cpp
+  test_streaks.cpp)
 target_include_directories(flightcore_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 target_link_libraries(flightcore_tests PRIVATE flightcore)
 
@@ -39,3 +43,7 @@ target_link_libraries(flight_lab PRIVATE flightcore)
 
 enable_testing()
 add_test(NAME flightcore_tests COMMAND flightcore_tests)
+
+# Wind lab: renders visible-wind streaks around a building to an SVG.
+add_executable(wind_lab wind_lab.cpp)
+target_link_libraries(wind_lab PRIVATE flightcore)
