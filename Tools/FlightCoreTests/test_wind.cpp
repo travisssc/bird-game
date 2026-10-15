@@ -2,6 +2,7 @@
 #include "FlightCore/WindField.h"
 
 #include <cmath>
+#include <initializer_list>
 
 using namespace BirdFlight;
 
@@ -210,4 +211,69 @@ TEST_CASE("CityBreeze preset: never dead calm, gentler in the streets")
 		CHECK(std::hypot(High.X, High.Y) > 2.0);
 	}
 	CHECK(GetShearFactor(W, 8.0) < GetShearFactor(W, 80.0));
+}
+
+TEST_CASE("Building wind stays continuous around boxes at an angle to the wind and above raised bases")
+{
+	// Regression: the "inside the building" test used the wind-aligned bounding box, so a 45 deg
+	// box had dead-calm, discontinuous corners in open air. And boxes on a raised base cut off at
+	// full strength just below it.
+	FWindObstacle Rotated;
+	Rotated.HalfLengthX = 10.0;
+	Rotated.HalfWidthY = 10.0;
+	Rotated.Height = 30.0;
+	Rotated.YawRad = Pi / 4.0;
+	FWindObstacle Raised = Rotated;
+	Raised.YawRad = 0.0;
+	Raised.BaseZ = 30.0;
+	auto InsideFootprint = [](const FWindObstacle& B, const FVec3& P) {
+		const double Lx = P.X * std::cos(B.YawRad) + P.Y * std::sin(B.YawRad);
+		const double Ly = -P.X * std::sin(B.YawRad) + P.Y * std::cos(B.YawRad);
+		return std::fabs(Lx) < B.HalfLengthX && std::fabs(Ly) < B.HalfWidthY && P.Z >= B.BaseZ && P.Z < B.BaseZ + B.Height;
+	};
+	for (const FWindObstacle* B : { &Rotated, &Raised })
+	{
+		FWindParams W;
+		W.BaseWind = FVec3(8.0, 0.0, 0.0);
+		W.WakeTurbulence = 0.0;
+		W.Obstacles = B;
+		W.NumObstacles = 1;
+		double WorstJump = 0.0;
+		// Lines along the wind at several offsets, and vertical lines through the raised base.
+		for (double Y = -20.0; Y <= 20.0; Y += 3.0)
+		{
+			for (double Z : { 5.0, 25.0, 29.0, 31.0, 45.0 })
+			{
+				FVec3 Last = SampleWind(W, FVec3(-100.0, Y, Z), 0.0);
+				for (double X = -100.0; X < 150.0; X += 0.25)
+				{
+					const FVec3 P(X, Y, Z);
+					const FVec3 S = SampleWind(W, P, 0.0);
+					if (!InsideFootprint(*B, P) && !InsideFootprint(*B, FVec3(X - 0.25, Y, Z)))
+					{
+						WorstJump = std::fmax(WorstJump, (S - Last).Size());
+					}
+					Last = S;
+				}
+			}
+			for (double X : { -14.0, -11.0, 0.0, 20.0, 40.0 })
+			{
+				FVec3 Last = SampleWind(W, FVec3(X, Y, 0.0), 0.0);
+				for (double Z = 0.0; Z < 80.0; Z += 0.25)
+				{
+					const FVec3 P(X, Y, Z);
+					const FVec3 S = SampleWind(W, P, 0.0);
+					if (!InsideFootprint(*B, P) && !InsideFootprint(*B, FVec3(X, Y, Z - 0.25)))
+					{
+						WorstJump = std::fmax(WorstJump, (S - Last).Size());
+					}
+					Last = S;
+				}
+			}
+		}
+		CAPTURE(B->YawRad);
+		CAPTURE(B->BaseZ);
+		CAPTURE(WorstJump);
+		CHECK(WorstJump < 0.3);
+	}
 }

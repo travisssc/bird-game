@@ -124,7 +124,8 @@ fun and satisfying mechanics come first.)
 - **g-cap: yes, 7 g.** Weighty but not sluggish (owner: realism, but fun first, "not too
   weighty"). `MaxLoadFactor` is the lever.
 - **Bank from the flight path: on by default** (owner unsure, wants to test). Measured: banking
-  from the nose's turn rate left the path 5° off ~2.9 s into a 90° turn. Banking from the
-  nose-vs-path gap lines it up in ~1.5 s with no overshoot. Added turn stall protection so
+  from the nose's turn rate left the path 5° off ~2.9 s into a 90° turn. Holding the bank
+  until the path catches up lines it up in ~1.4 s with no overshoot (the hold never starts a
+  bank, so wind can't roll the bird). Added turn stall protection so
   camera flicks don't stall the bird mid-turn. `BankTrackBlend` 0/1 is the A/B for the playtest.
 - **Flap beats tuck** when both are held: kept.

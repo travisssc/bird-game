@@ -176,3 +176,17 @@ TEST_CASE("Look control ignores NaN input and repairs NaN state")
 	CHECK(std::isfinite(L.HeadPitchRad));
 	CHECK(L.GetAimDirection().Size() == doctest::Approx(1.0));
 }
+
+TEST_CASE("A big camera flick past the neck limit turns the head toward the camera's side")
+{
+	// Regression: the side was taken from the head's current yaw, so a head resting slightly
+	// left stuck at the left limit when the camera flicked to 150 deg right in one frame.
+	const FLookParams P;
+	const FFlightState Body = CruiseState(12.0, 100.0);
+	FLookState L;
+	Look(L, Body, P, 0.2, -0.5, 0.0, true); // head a few degrees left
+	REQUIRE(L.HeadYawRad < 0.0);
+	Look(L, Body, P, FrameDt, 156.0, 0.0, true); // one-frame flick to ~150 deg right
+	Look(L, Body, P, 0.5, 0.0, 0.0, true);
+	CHECK(L.HeadYawRad == doctest::Approx(P.NeckYawLimitDeg * Deg));
+}

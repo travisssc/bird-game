@@ -30,7 +30,8 @@ streaks (`WindStreaks.h`).
    the look controller) at a limited rate, slower with wings tucked. Heading and pitch are
    stepped separately, so flicking the camera behind you makes a flat turn, not a split-S.
    Nose pitch is clamped to ±88°. On top of that:
-   - **Glide trim** (`GlideTrimAssist`, on): when gliding (no flap/tuck, not stalled), aiming
+   - **Glide trim** (`GlideTrimAssist`, on): when not flapping or tucking (Space held or wings
+     relaxed) and not stalled, aiming
      at the horizon holds the best-glide attitude, nose ~5° up for the crow. It fades out
      linearly by 30° of aim pitch, so dives and climbs are untouched.
    - **Stall:** when stalled (and not flapping), the effective aim is pulled toward the
@@ -39,15 +40,18 @@ streaks (`WindStreaks.h`).
      airflow makes a big force, so the nose is held within the angle that produces 7 g. The
      path then bends at 7 g and the nose rides along it. A 60 m/s pull-out takes ~1.5 s and
      ~60 m of height instead of a 19 g snap. The forces are clamped to the same cap as a backstop.
+     (The nose limit adds the lift and tail slopes, so a pure pull peaks a little under, ~6.5–7 g.)
    - **Turn stall protection** (`TurnStallMargin`): yawing the nose ahead of the flight path in
      a bank raises the wing's angle of attack. The yaw step is shortened so a turn never pushes
      it past 90% of stall: a camera flick makes the bird turn wider, not stall. Pulling the nose
      up can still stall it.
-   - **Bank** follows a coordinated-turn rule, `tan(bank) = v * turnRate / g`, capped at 65°.
-     The turn rate is blended (`BankTrackBlend`, 1 = on) from the nose's yaw rate and the
-     rate the flight path must turn to catch up with the nose (`gap / BankTrackTimeSec`). So
-     the bird stays banked until its path has caught up, like a bike leaning out of a corner,
-     instead of rolling level early and skidding sideways.
+   - **Bank** follows a coordinated-turn rule, `tan(bank) = v * yawRate / g`, capped at 65°.
+     When the nose stops but the flight path hasn't caught up, the bank is *held* (and eases
+     off) at the rate the path must turn to close the gap (`gap / BankTrackTimeSec`,
+     `BankTrackBlend` 1 = on). The bird stays banked until its path has caught up, like a bike
+     leaning out of a corner, instead of rolling level early and skidding sideways. The hold
+     term never *starts* a bank, so wind moving the path (gusts, a tailwind on takeoff) can't
+     roll the bird.
 3. **Forces (physics-driven).** These are computed from the *air-relative* velocity (velocity minus wind):
    - Lift = q · S · CL(α), perpendicular to the airflow. CL is linear up to stall (~17.8°), then
      decays. S = wing area × extension.
@@ -64,7 +68,7 @@ streaks (`WindStreaks.h`).
 - Look up while gliding: you bleed speed and stall.
 - Tuck: you drop like a stone, up to about 65 m/s.
 - Pull out of a dive: a weighty 7 g arc, then the speed turns back into height (a zoom climb).
-- Turn: the bird banks up to ~60° and carves round. A 90° turn is lined up in ~1.5 s, with no
+- Turn: the bird banks up to ~65° and carves round. A 90° turn is lined up in ~1.4 s, with no
   stall and no sideways skid at the end.
 - **Airspeed is speed through the air**, not over the ground. In calm air a slow bird can't
   glide: it stalls and has to dive for speed. Facing into a wind gives airspeed for free, so
@@ -156,11 +160,12 @@ They fade in and out over their 1.5–2.5 s life. Preview, rendered from the rea
 | Glide trim | level aim = theoretical best glide (±3%); off = nose level; mapping monotonic |
 | Banked 90° turn | path lined up < 2 s, no overshoot; nose-rate banking > 1 s slower |
 | Flick turns at glide speed | never stall |
-| Hanging in a building's updraft | 8 m/s wind: climbs > 5 m, moves < 25 m in 20 s; calm: sinks |
+| No turn input (crosswind/tailwind takeoff, side gust gliding or diving) | bank < 10° |
+| Hanging in a building's updraft | 8 m/s wind: climbs > 5 m, drifts < 40 m in 20 s; calm: sinks, travels > 100 m |
 | Slow in calm air vs headwind | calm: stalls and dives; 8 m/s headwind: glides |
-| Shear, building flow, rotated boxes, CityBreeze | see `test_wind.cpp`; flow continuous |
+| Shear, building flow, rotated boxes, CityBreeze | see `test_wind.cpp`; flow continuous (incl. 45° boxes, raised bases) |
 | Free look / head look | aim frozen, course held, neck limits, no flick, swing back, NaN-safe |
-| Wind streaks | none in calm air; denser/longer in wind; along the wind; rise over a face |
+| Wind streaks | none in calm air; denser/longer in wind; along the wind; rise over a face; fps-independent |
 
 Chart of the scripted scenarios: [img/flight_lab.svg](img/flight_lab.svg). To regenerate it, see
 docs/BUILD.md.

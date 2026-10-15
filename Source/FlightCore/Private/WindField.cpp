@@ -62,7 +62,7 @@ namespace BirdFlight
 			const double Dy = Pos.Y - Ob.CenterY;
 			const double Reach = std::sqrt(Ob.HalfLengthX * Ob.HalfLengthX + Ob.HalfWidthY * Ob.HalfWidthY)
 				+ (Params.WakeLengthHeights + 2.0) * H;
-			if (H <= 0.0 || Pos.Z > Top + 2.0 * H || Pos.Z < Ob.BaseZ || Dx * Dx + Dy * Dy > Reach * Reach)
+			if (H <= 0.0 || Pos.Z > Top + 2.0 * H || Pos.Z < Ob.BaseZ - H || Dx * Dx + Dy * Dy > Reach * Reach)
 			{
 				return E;
 			}
@@ -73,17 +73,26 @@ namespace BirdFlight
 			const double Rel = Ob.YawRad - std::atan2(WindDirY, WindDirX);
 			const double ExtentA = std::fabs(Ob.HalfLengthX * std::cos(Rel)) + std::fabs(Ob.HalfWidthY * std::sin(Rel));
 			const double ExtentC = std::fabs(Ob.HalfLengthX * std::sin(Rel)) + std::fabs(Ob.HalfWidthY * std::cos(Rel));
-			const double ZRel = (Pos.Z - Ob.BaseZ) / H; // 0 at the ground, 1 at the roof
+			// 0 at the base, 1 at the roof. A box on a raised base (a terrace, a rooftop structure)
+			// fades out smoothly below its base instead of cutting off.
+			const double ZRelRaw = (Pos.Z - Ob.BaseZ) / H;
+			const double ZRel = (std::max)(ZRelRaw, 0.0);
+			const double BelowBase = ZRelRaw >= 0.0 ? 1.0 : std::exp(-(ZRelRaw / 0.3) * (ZRelRaw / 0.3));
 
 			const double OutsideC = (std::max)(std::fabs(C) - ExtentC, 0.0) / (0.5 * H);
-			const double CrossFactor = std::exp(-OutsideC * OutsideC);
+			const double CrossFactor = std::exp(-OutsideC * OutsideC) * BelowBase;
 			if (CrossFactor < 1e-4)
 			{
 				return E;
 			}
-			if (std::fabs(A) < ExtentA && OutsideC == 0.0 && ZRel < 1.0)
+			// Inside the real (possibly rotated) footprint: collision's problem, keep it calm. The
+			// flow formulas below use the wind-aligned extents but are continuous everywhere else.
+			const double CosYaw = std::cos(Ob.YawRad), SinYaw = std::sin(Ob.YawRad);
+			const double LocalX = Dx * CosYaw + Dy * SinYaw;
+			const double LocalY = -Dx * SinYaw + Dy * CosYaw;
+			if (std::fabs(LocalX) < Ob.HalfLengthX && std::fabs(LocalY) < Ob.HalfWidthY && ZRelRaw >= 0.0 && ZRelRaw < 1.0)
 			{
-				E.HorizontalScale = 0.0; // inside the building: collision's problem, keep it calm
+				E.HorizontalScale = 0.0;
 				return E;
 			}
 
@@ -91,7 +100,7 @@ namespace BirdFlight
 			// and escapes up (the updraft below) and sideways, most strongly near the edges.
 			const double Upwind = -ExtentA - A; // > 0 upwind of the windward face
 			const double StagAlong = Upwind >= 0.0 ? std::exp(-Upwind / (0.4 * H)) : std::exp(Upwind / (0.3 * H));
-			const double AboveRoofEdge = (ZRel - 1.0) / 0.15;
+			const double AboveRoofEdge = (ZRel - 1.0) / 0.25;
 			const double BelowRoof = ZRel <= 1.0 ? 1.0 : std::exp(-AboveRoofEdge * AboveRoofEdge);
 			E.HorizontalScale = 1.0 - 0.85 * StagAlong * BelowRoof * CrossFactor;
 			const double Edge = Clamp(std::fabs(C) / (std::max)(ExtentC, 1e-3), 0.0, 1.0);

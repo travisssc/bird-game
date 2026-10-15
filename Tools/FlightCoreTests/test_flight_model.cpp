@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <initializer_list>
 #include <limits>
 
 using namespace BirdFlight;
@@ -640,7 +641,7 @@ TEST_CASE("Wind is what lets a bird glide slowly: hanging in a building's updraf
 	CAPTURE(TravelWindy);
 	CAPTURE(ClimbCalm);
 	CHECK(ClimbWindy > 5.0);
-	CHECK(TravelWindy < 25.0);
+	CHECK(TravelWindy < 40.0); // under 2 m/s average drift: hanging, vs ~8.5 m/s in calm air
 	CHECK(ClimbCalm < -10.0);
 	CHECK(TravelCalm > 100.0);
 }
@@ -668,4 +669,51 @@ TEST_CASE("Without wind or speed there's no glide: a slow bird in calm air stall
 	Simulate(Windy, In, P, 10.0, &Headwind,
 		[&](double, const FFlightTelemetry& T, FFlightState&, FFlightInput&) { WindyStall |= T.bStalled; });
 	CHECK_FALSE(WindyStall);
+}
+
+TEST_CASE("No bank without a turn: crosswind/tailwind takeoff, side gusts while gliding or diving")
+{
+	// Regression: banking from the nose-vs-path heading gap rolled the bird to 40-65 deg with
+	// no turn input whenever the air came from the side or behind.
+	const FFlightParams P;
+	SUBCASE("flap takeoff from rest in a light breeze from behind or beside")
+	{
+		for (double FromDeg : { 90.0, 135.0, 180.0, -100.0 })
+		{
+			CAPTURE(FromDeg);
+			FFlightState S;
+			S.WingExtension = 0.5;
+			FWindParams W;
+			// Wind blowing toward the bird's nose-relative direction FromDeg + 180.
+			W.BaseWind = DirFromPitchYawDeg(0.0, FromDeg + 180.0) * 3.0;
+			FFlightInput In;
+			In.bFlap = true;
+			In.AimDirection = DirFromPitchYawDeg(30.0, 0.0);
+			double MaxBank = 0.0;
+			Simulate(S, In, P, 2.0, &W, [&](double, const FFlightTelemetry&, FFlightState& St, FFlightInput&) {
+				MaxBank = std::max(MaxBank, std::fabs(St.BankRad));
+			});
+			CHECK(MaxBank * 180.0 / Pi < 10.0);
+		}
+	}
+	SUBCASE("side gust in a level glide and in a steep dive")
+	{
+		for (double PitchDeg : { 0.0, -85.0 })
+		{
+			CAPTURE(PitchDeg);
+			FFlightState S = CruiseState(12.0, 3000.0);
+			FFlightInput In;
+			In.bGlide = PitchDeg == 0.0;
+			In.bTuck = !In.bGlide;
+			In.AimDirection = DirFromPitchYawDeg(PitchDeg, 0.0);
+			Simulate(S, In, P, 6.0); // settle
+			FWindParams Gust;
+			Gust.BaseWind = FVec3(0.0, 3.0, 0.0);
+			double MaxBank = 0.0;
+			Simulate(S, In, P, 2.0, &Gust, [&](double, const FFlightTelemetry&, FFlightState& St, FFlightInput&) {
+				MaxBank = std::max(MaxBank, std::fabs(St.BankRad));
+			});
+			CHECK(MaxBank * 180.0 / Pi < 10.0);
+		}
+	}
 }

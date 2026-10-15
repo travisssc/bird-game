@@ -71,5 +71,6 @@ namespace BirdFlight
 
 		FWindStreak Streaks[MaxStreaks];
 		std::uint64_t RngState;
+		double SpawnCarry = 0.0; // fractional spawn attempts carried between frames
 	};
 }

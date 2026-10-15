@@ -179,3 +179,25 @@ TEST_CASE("Streaks are repeatable for a seed and ignore bad frame times")
 	A.Update(W, 2.0, FVec3(0.0, 0.0, 50.0), FVec3(1.0, 0.0, 0.0), P, std::nan(""));
 	CHECK(A.CountAlive() == Before);
 }
+
+TEST_CASE("Streak spawning doesn't depend on frame rate")
+{
+	// Regression: at least one spawn attempt per frame filled the budget ~2x faster at 240 fps.
+	FWindStreakParams P;
+	FWindParams W;
+	W.BaseWind = FVec3(9.0, 0.0, 0.0);
+	auto AliveAfter = [&](double Fps) {
+		FWindStreakSystem Sys;
+		const int Frames = static_cast<int>(std::lround(0.5 * Fps));
+		for (int i = 0; i < Frames; ++i)
+		{
+			Sys.Update(W, i / Fps, FVec3(0.0, 0.0, 50.0), FVec3(1.0, 0.0, 0.0), P, 1.0 / Fps);
+		}
+		return Sys.CountAlive();
+	};
+	const int Slow = AliveAfter(30.0);
+	const int Fast = AliveAfter(240.0);
+	CAPTURE(Slow);
+	CAPTURE(Fast);
+	CHECK(std::abs(Fast - Slow) < P.NumStreaks / 8);
+}

@@ -36,16 +36,17 @@ namespace BirdFlight
 			S.HeadPitchRad = FiniteOr(S.HeadPitchRad, 0.0);
 		}
 
-		// Clamp a head yaw target to the neck. Past the limit (looking behind), the head stays on
-		// the side it's already on, so it doesn't flick across when the camera passes behind.
+		// Clamp a head yaw target to the neck. Past the limit (looking behind), a head already
+		// turned well to one side stays there, so it doesn't flick across when the camera passes
+		// behind; a head near the middle turns toward the camera's side.
 		double ClampHeadYaw(double Target, double Current, double Limit)
 		{
 			if (std::fabs(Target) <= Limit)
 			{
 				return Target;
 			}
-			const double Side = Current != 0.0 ? (Current > 0.0 ? 1.0 : -1.0) : (Target > 0.0 ? 1.0 : -1.0);
-			return Side * Limit;
+			const double Reference = std::fabs(Current) > 0.5 * Limit ? Current : Target;
+			return (Reference > 0.0 ? 1.0 : -1.0) * Limit;
 		}
 	}
 

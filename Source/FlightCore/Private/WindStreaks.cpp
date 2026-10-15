@@ -139,7 +139,9 @@ namespace BirdFlight
 		// chance equal to how visible the wind is there: density follows the local wind, so a
 		// sheltered viewer still sees the wind blowing past nearby, and calm air shows nothing.
 		const int Budget = (std::max)(0, (std::min)(Params.NumStreaks, MaxStreaks));
-		const int Attempts = static_cast<int>(std::ceil(Budget * Dt / std::fmax(Params.LifetimeSec * 0.6, 1e-3)));
+		SpawnCarry += Budget * Dt / std::fmax(Params.LifetimeSec * 0.6, 1e-3);
+		const int Attempts = static_cast<int>(std::floor(SpawnCarry));
+		SpawnCarry -= Attempts;
 		int Alive = CountAlive();
 		int Slot = 0;
 		for (int Attempt = 0; Attempt < Attempts && Alive < Budget; ++Attempt)

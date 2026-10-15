@@ -56,11 +56,11 @@ namespace BirdFlight
 
 		// --- Feel (decided by playtest; see docs/FLIGHT_MODEL.md) ---
 		double MaxLoadFactor = 7.0;           // g cap on aerodynamic force; fast pull-outs carve instead of snapping
-		double GlideTrimAssist = 1.0;         // 0..1: aiming level while gliding holds best-glide attitude
+		double GlideTrimAssist = 1.0;         // 0..1: aiming level without flap/tuck holds best-glide attitude
 		double GlideTrimFadeDeg = 30.0;       // trim fades out as the aim moves this far from level
 		double BankTrackBlend = 1.0;          // 0 = bank from the nose's turn rate, 1 = from the nose-vs-path gap
 		double BankTrackTimeSec = 0.25;       // how fast the path is expected to catch up with the nose
-		double TurnStallMargin = 0.9;         // turning can't push AoA past this fraction of stall (>1 disables)
+		double TurnStallMargin = 0.9;         // turning can't push AoA past this fraction of stall (2 = effectively off)
 
 		// --- Integration ---
 		double MaxSubstepSec = 1.0 / 120.0;

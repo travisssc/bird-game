@@ -158,25 +158,36 @@ namespace BirdFlight
 					}
 				}
 			}
-			// Bank like a coordinated turn: tan(bank) = v * turnRate / g. The turn rate is a blend of
-			// the nose's yaw rate (bank only while the nose swings) and the rate the flight path must
-			// turn to catch up with the nose (bank until the path has caught up, so the end of a turn
-			// carves like a bike leaning out of a corner instead of skidding flat).
+			// Bank like a coordinated turn: tan(bank) = v * turnRate / g, from the nose's yaw rate.
+			// After the nose stops, the flight path is still catching up with it, so the bank is held
+			// (and eases off) at the rate the path must turn to close the gap: the end of a turn
+			// carves like a bike leaning out of a corner instead of rolling level and skidding. That
+			// catch-up term only ever holds a bank the turn already built; it never starts one, so
+			// wind moving the path (gusts, a breeze from behind on takeoff) can't roll the bird.
 			const double AirHorizontal = std::sqrt(AirVelocity.X * AirVelocity.X + AirVelocity.Y * AirVelocity.Y);
 			const bool bTrackBank = Params.BankTrackBlend > 0.0 && AirHorizontal > 1.0;
 			const double TrackYaw = bTrackBank ? std::atan2(AirVelocity.Y, AirVelocity.X) : 0.0;
 			const double MaxBank = Params.MaxBankDeg * DegToRad;
 			const double MaxBankStep = Params.BankRateDegPerSec * DegToRad * Dt;
+			const double LastBank = State.BankRad;
 			auto BankForYaw = [&](double Yaw)
 			{
-				double TurnRateForBank = WrapAngle(Yaw - OldYaw) / Dt;
+				const double YawRateNow = WrapAngle(Yaw - OldYaw) / Dt;
+				double Desired = Clamp(std::atan(Airspeed * YawRateNow / Params.Gravity), -MaxBank, MaxBank);
 				if (bTrackBank)
 				{
 					const double CatchUpRate = WrapAngle(Yaw - TrackYaw) / Params.BankTrackTimeSec;
-					TurnRateForBank = Lerp(TurnRateForBank, CatchUpRate, Params.BankTrackBlend);
+					const double CatchUp = Params.BankTrackBlend
+						* Clamp(std::atan(Airspeed * CatchUpRate / Params.Gravity), -MaxBank, MaxBank);
+					const double Hold = CatchUp * LastBank > 0.0
+						? (CatchUp > 0.0 ? 1.0 : -1.0) * (std::min)(std::fabs(CatchUp), std::fabs(LastBank))
+						: 0.0;
+					if (Hold * Desired >= 0.0 && std::fabs(Hold) > std::fabs(Desired))
+					{
+						Desired = Hold;
+					}
 				}
-				const double Desired = Clamp(std::atan(Airspeed * TurnRateForBank / Params.Gravity), -MaxBank, MaxBank);
-				return MoveToward(State.BankRad, Desired, MaxBankStep);
+				return MoveToward(LastBank, Desired, MaxBankStep);
 			};
 
 			// Turn stall protection: yawing the nose ahead of the flight path in a bank raises the
@@ -372,7 +383,7 @@ namespace BirdFlight
 	void SanitizeParams(FFlightParams& P)
 	{
 		P.MassKg = std::fmax(FiniteOr(P.MassKg, 0.45), 0.01);
-		P.Gravity = std::fmax(FiniteOr(P.Gravity, 9.81), 0.0);
+		P.Gravity = std::fmax(FiniteOr(P.Gravity, 9.81), 0.1);
 		P.AirDensity = std::fmax(FiniteOr(P.AirDensity, 1.225), 0.0);
 		P.WingAreaM2 = std::fmax(FiniteOr(P.WingAreaM2, 0.0), 0.0);
 		P.AspectRatio = std::fmax(FiniteOr(P.AspectRatio, 6.0), 0.5);

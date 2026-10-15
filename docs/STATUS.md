@@ -7,7 +7,7 @@ _Last updated: 2026-10-15 (cloud session: free look, wind mechanic, flight feel)
 - City: we build our own (Cesium/Google Tiles dropped 2026-10-15, see DECISIONS.md).
 - **Flight core done and verified standalone** (`Source/FlightCore/`, 28 tests passing with gcc,
   clang and gcc+ASan/UBSan; independently reviewed, findings fixed). Design: docs/FLIGHT_MODEL.md. Chart: docs/img/flight_lab.svg.
-- **Added 2026-10-15 (second session), all verified standalone (53 tests):** Alt free look +
+- **Added 2026-10-15 (second session), all verified standalone (57 tests, independently reviewed, findings fixed):** Alt free look +
   head look (`LookControl.h`), wind as a core mechanic (shear, building ridge lift and wakes,
   `CityBreeze()` default), visible wind streaks (`WindStreaks.h`, preview
   docs/img/wind_streaks.svg), a 7 g pull-out cap, glide trim (level = best glide), banking from
