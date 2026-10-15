@@ -7,7 +7,8 @@ Owner's words, lightly organized. These are design intent, not implementation.
 - Like **"The Isle"** (survival as a dinosaur), but you're a bird. Pick your species.
 - The fun is **flying** and **interacting with other birds**.
 - Later: eat food on the ground, steal food out of NPC humans' hands.
-- **Core goal:** a real-world map, like Microsoft Flight Simulator (Cesium + Google 3D Tiles).
+- A city we build ourselves (real-world tiles dropped: too low-detail up close). A real-world
+  *layout* generated from OpenStreetMap is a possible later option.
 - Look: a cartoon/realism hybrid, more real than cartoon. Not photorealistic.
 
 ## V1: flight mechanics (the only focus until it feels great)

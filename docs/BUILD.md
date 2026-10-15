@@ -1,5 +1,20 @@
 # Build, run, test
 
+## Flight core (works everywhere, including cloud sessions)
+```
+cmake -S Tools/FlightCoreTests -B build/flightcore -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/flightcore
+./build/flightcore/flightcore_tests            # all tests; add -s for details
+./build/flightcore/flight_lab > build/lab.csv  # scripted flights
+python3 Tools/FlightCoreTests/plot_lab.py build/lab.csv docs/img/flight_lab.svg
+```
+Warnings are errors (`-Wshadow -Wconversion`, etc.) to approximate Unreal's strictness.
+Also worth running occasionally: clang (`CXX=clang++`) and gcc with
+`-DCMAKE_CXX_FLAGS="-fsanitize=address,undefined"` (clang's sanitizer runtime is missing in the
+cloud image, so use gcc there). On Windows, any Visual Studio generator works.
+
+## Unreal
+
 > **Status: PROVISIONAL.** Written before the UE project existed. The first local session must
 > run each command, fix it, and remove this note.
 

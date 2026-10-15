@@ -34,3 +34,6 @@ scratch/
 # Secrets
 .env
 *.pem
+
+# Standalone flight-core build output
+build/

@@ -75,3 +75,36 @@ The flight model must not depend on which world source is used.
 ## 2026-10-13 — Controls (initial)
 Hold Space = glide, hold Left Click = flap, hold **Shift = tuck wings / dive** (confirmed by
 the owner), mouse = steer/camera. All bindings are via Enhanced Input so they stay remappable.
+
+## 2026-10-15 — City: build our own (supersedes the Cesium/Google Tiles plan above)
+**Decision:** we drop Cesium + Google Photorealistic 3D Tiles. The game world is a city we build.
+**Why (owner's call, agreed):** photogrammetry tiles are low-detail and "melted" up close, and
+the game is played up close: landing, walking, perching, human NPCs and stealing food. The owner
+also wants the city to be fully part of the game (collision everywhere, landable surfaces, the
+server knows the geometry). Streamed Google tiles fight all of that, and their terms (no caching,
+attribution, billing account) add friction. The owner wants personal use for now and will try
+a small local server with friends soon.
+**Still open (later):** a *real-world-inspired* layout is possible by generating our own city
+geometry from OpenStreetMap data (footprints/heights, ODbL, attribution required). That keeps
+real layouts with our own art. Not needed for V1; flight testing uses a simple test city.
+
+## 2026-10-15 — Flight model: engine-agnostic C++ core with standalone tests
+(Revisits the 2026-10-13 test decision.)
+The flight simulation lives in `Source/FlightCore/`: plain C++17, its own UE module
+(depends only on Core), and no UObjects. It's tested by doctest via CMake in
+`Tools/FlightCoreTests/`.
+**Why now:** the owner is away for a while, so cloud sessions are common, and this lets the most
+important code be built and verified without Unreal. A deterministic pure core also suits
+multiplayer prediction. UE Automation Specs are still used for Unreal-side code.
+**Model:** "sim-lite" hybrid. The player drives the nose orientation (rate-limited toward the
+camera aim, auto-bank); real aerodynamics (AoA, stall, induced drag) drive velocity. Units are
+SI and the axes are Unreal's (X fwd, Y right, Z up). Details: docs/FLIGHT_MODEL.md.
+**Planned Unreal integration:** a CharacterMovementComponent subclass with a custom "Flying"
+movement mode calling `BirdFlight::Step()` in `PhysCustom`. That gives CMC's collision sweeps,
+ground modes, and battle-tested client prediction/replication. Glide/flap/tuck use 3 of CMC's
+4 custom saved-move flags. (Considered: the Mover plugin, which is newer and less proven, and a
+fully custom pawn, which would mean writing prediction ourselves.)
+
+## 2026-10-15 — Multiplayer target (near term)
+Small sessions with a friend or two on a local/listen server. No dedicated servers, accounts or
+matchmaking for now.

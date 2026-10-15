@@ -6,8 +6,8 @@ Keep this file under ~150 lines: put detail in `docs/` and link to it.
 ## What this is
 A **multiplayer, third-person 3D bird game for desktop (PC)**. You play as a bird flying
 around a city. Think "The Isle", but as a bird: pick a species, fly, interact with other
-players' birds, and later eat food and steal it from humans. A **real-world city map** in the
-style of Microsoft Flight Simulator is a **core goal** (Cesium for Unreal; see DECISIONS.md).
+players' birds, and later eat food and steal it from humans. The city is **our own build**
+(real-world tiles were dropped; see DECISIONS.md).
 **V1 = flight mechanics only.** Gliding, flapping, tucking/diving and wind must feel
 satisfying. We iterate through many playtest rounds with the owner.
 Full vision and controls: [docs/VISION.md](docs/VISION.md). Current status and next steps:
@@ -17,16 +17,19 @@ Full vision and controls: [docs/VISION.md](docs/VISION.md). Current status and n
 - **Unreal Engine 5, C++-first.** Gameplay logic lives in C++. Blueprints are only thin
   data/asset wrappers, because Claude can't read binary `.uasset` files. Why: [docs/DECISIONS.md](docs/DECISIONS.md).
 - Enhanced Input, Chaos physics, UE networking (replication) for multiplayer later.
-- Tests: UE Automation framework (Automation Spec, `BirdGame.*` test names).
+- **Flight core** (`Source/FlightCore/`): plain C++17 with no Unreal deps, tested standalone with
+  doctest + CMake (runs in cloud sessions too). Design: [docs/FLIGHT_MODEL.md](docs/FLIGHT_MODEL.md).
+  Run its tests: `cmake -S Tools/FlightCoreTests -B build/flightcore && cmake --build build/flightcore && ./build/flightcore/flightcore_tests`
+- Unreal-side tests: UE Automation framework (Automation Spec, `BirdGame.*` test names).
 - Git + **Git LFS** for binary assets (see `.gitattributes`). Host: GitHub `travisssc/bird-game`.
 - Build, run and test commands: [docs/BUILD.md](docs/BUILD.md). The UE project itself is
   **not created yet**; that's the first task in docs/STATUS.md.
 
 ## Where sessions run
 - **Owner's Windows PC (normal):** full loop. Build, test, launch the game, screenshot.
-- **Cloud sessions (claude.ai/code):** no GPU and no Unreal. You can only edit code and docs.
-  Mark any such change **UNVERIFIED** in the commit message and in docs/STATUS.md, and verify
-  it in the next local session. Never claim cloud-written UE code works.
+- **Cloud sessions (claude.ai/code):** no GPU and no Unreal. The flight core *can* be fully built
+  and tested there. Unreal-side code can't: mark it **UNVERIFIED** in the commit message and in
+  docs/STATUS.md, and verify it in the next local session. Never claim cloud-written UE code works.
 
 ## Definition of "done"
 A change is complete only when **all** of these hold:
@@ -118,3 +121,8 @@ so no future session repeats it.
   before discussing it with the owner. Propose first, even when the owner said "no preference".
 - 2026-10-13: Cloud sessions are ephemeral containers. Anything not committed **and pushed** is
   lost, and memory written there does not reach the owner's PC. DECISIONS.md is the durable record.
+- 2026-10-15: Derive test expectations from physics *before* asserting. I assumed "nose level
+  glide stalls", but a fixed-attitude glider settles into a stable descent. Check the math first.
+- 2026-10-15: In the flight core, don't name anything `PI`, `check`, `verify` or `ensure`: Unreal
+  defines these as macros. Use `BirdFlight::Pi`, and write `(std::min)(a, b)` because of Windows
+  macros. GCC rejects `FVec3()` as a default argument inside FVec3 itself (use an overload).

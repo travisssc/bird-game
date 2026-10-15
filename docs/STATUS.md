@@ -1,10 +1,14 @@
 # Status
 
-_Last updated: 2026-10-13 (setup session, cloud)_
+_Last updated: 2026-10-15 (cloud session: flight core)_
 
 ## Current state
-- Repo contains docs and config only. **No Unreal project exists yet.**
-- Engine decided: UE5, C++-first (see DECISIONS.md).
+- Engine decided: UE5, C++-first. **No Unreal project exists yet.**
+- City: we build our own (Cesium/Google Tiles dropped 2026-10-15, see DECISIONS.md).
+- **Flight core done and verified standalone** (`Source/FlightCore/`, 24 tests passing with gcc,
+  clang and gcc+ASan/UBSan). Design: docs/FLIGHT_MODEL.md. Chart: docs/img/flight_lab.svg.
+- UNVERIFIED in Unreal: `FlightCore.Build.cs` and `FlightCoreModule.cpp` were written without an
+  engine. The first local build must confirm the module compiles under UBT/MSVC.
 
 ## Next up: first local session on the owner's PC (suggest Opus: it's architecture)
 1. Check the environment: UE5 installed (pick the latest stable 5.x and record the exact
@@ -17,12 +21,16 @@ _Last updated: 2026-10-13 (setup session, cloud)_
    running them. Record anything surprising in the CLAUDE.md mistake log.
 4. Add a first Automation Spec test (a trivial one, to prove the pipeline) and run it headless.
 5. Find a free crow asset (record source + license in docs/ASSETS.md).
-6. Propose a flight-model architecture to the owner before building it. It must not depend on
-   the world source (tiles vs a hand-built city).
+6. Add the existing `FlightCore` module to `BirdGame.uproject` / the game module's dependencies
+   and build it under MSVC. Fix anything UBT complains about.
+7. Build the Unreal integration (plan in DECISIONS.md, 2026-10-15): a CMC subclass with a custom
+   Flying mode calling `BirdFlight::Step()`, Enhanced Input (Space/LMB/Shift/mouse), a
+   third-person camera, a simple blockout test city with tall buildings, and a debug HUD
+   (airspeed, AoA, stall, wing extension). Then the first playtest with the owner.
 
-## Soon after: Cesium real-world spike (core goal, see DECISIONS.md)
-Install Cesium for Unreal and check cost/licensing, collision, multiplayer implications and
-the look. **Ask the owner before creating any Google Cloud billing account or API key.**
+## Cloud-session work that doesn't need Unreal
+- Tune or extend the flight core (stamina, A/D manual roll, landing flare) with tests.
+- Ground/walking model design. Species parameter sets (gull, pigeon, hawk) as data.
 
 ## Open questions for the owner
 - None right now. (Answered 2026-10-13: RTX 3090 with 3 TB free; real-world map is core;
