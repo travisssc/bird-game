@@ -5,8 +5,8 @@ _Last updated: 2026-10-15 (cloud session: flight core)_
 ## Current state
 - Engine decided: UE5, C++-first. **No Unreal project exists yet.**
 - City: we build our own (Cesium/Google Tiles dropped 2026-10-15, see DECISIONS.md).
-- **Flight core done and verified standalone** (`Source/FlightCore/`, 24 tests passing with gcc,
-  clang and gcc+ASan/UBSan). Design: docs/FLIGHT_MODEL.md. Chart: docs/img/flight_lab.svg.
+- **Flight core done and verified standalone** (`Source/FlightCore/`, 28 tests passing with gcc,
+  clang and gcc+ASan/UBSan; independently reviewed, findings fixed). Design: docs/FLIGHT_MODEL.md. Chart: docs/img/flight_lab.svg.
 - UNVERIFIED in Unreal: `FlightCore.Build.cs` and `FlightCoreModule.cpp` were written without an
   engine. The first local build must confirm the module compiles under UBT/MSVC.
 
@@ -23,7 +23,8 @@ _Last updated: 2026-10-15 (cloud session: flight core)_
 5. Find a free crow asset (record source + license in docs/ASSETS.md).
 6. Add the existing `FlightCore` module to `BirdGame.uproject` / the game module's dependencies
    and build it under MSVC. Fix anything UBT complains about.
-7. Build the Unreal integration (plan in DECISIONS.md, 2026-10-15): a CMC subclass with a custom
+7. Build the Unreal integration (plan in DECISIONS.md 2026-10-15, plus the requirements list in
+   docs/FLIGHT_MODEL.md): a CMC subclass with a custom
    Flying mode calling `BirdFlight::Step()`, Enhanced Input (Space/LMB/Shift/mouse), a
    third-person camera, a simple blockout test city with tall buildings, and a debug HUD
    (airspeed, AoA, stall, wing extension). Then the first playtest with the owner.

@@ -358,3 +358,108 @@ TEST_CASE("Long frames are clamped so a hitch can't teleport the bird")
 	Step(S, In, P, FVec3(), 5.0);
 	CHECK(S.Position.X < 12.0 * P.MaxStepSec * 1.5);
 }
+
+TEST_CASE("Flicking the aim behind the bird turns it around instead of diving or looping")
+{
+	// Regression: great-circle rotation toward an aim behind and slightly below the bird
+	// pitched the nose down through vertical (a split-S) and snapped the roll.
+	const FFlightParams P;
+	const double AimYaws[] = { 150.0, 170.0, 179.0, 180.0, -175.0 };
+	for (double AimYaw : AimYaws)
+	{
+		CAPTURE(AimYaw);
+		FFlightState S = CruiseState(12.0, 300.0);
+		FFlightInput In;
+		In.bGlide = true;
+		In.AimDirection = DirFromPitchYawDeg(-10.0, AimYaw);
+		double MinNoseZ = 1.0;
+		double MaxUpChangeDeg = 0.0;
+		FVec3 LastUp = S.Up;
+		Simulate(S, In, P, 3.0, nullptr, [&](double, const FFlightTelemetry&, FFlightState& St, FFlightInput&) {
+			MinNoseZ = std::min(MinNoseZ, St.Forward.Z);
+			MaxUpChangeDeg = std::max(MaxUpChangeDeg, std::acos(Clamp(Dot(LastUp, St.Up), -1.0, 1.0)) * 180.0 / Pi);
+			LastUp = St.Up;
+		});
+		CHECK(MinNoseZ > DirFromPitchYawDeg(-30.0, 0.0).Z); // never pitches below -30 deg
+		CHECK(MaxUpChangeDeg < 10.0);                       // no roll snap within one frame
+		CHECK(Dot(S.Forward, In.AimDirection) > 0.99);       // completed the turn
+	}
+}
+
+TEST_CASE("Step repairs a corrupted orientation and ignores non-finite wind")
+{
+	const FFlightParams P;
+	const double NaN = std::numeric_limits<double>::quiet_NaN();
+	SUBCASE("Forward == Up (degenerate basis)")
+	{
+		FFlightState S = CruiseState(12.0, 300.0);
+		S.Forward = FVec3(0.0, 0.0, 1.0);
+		S.Up = FVec3(0.0, 0.0, 1.0);
+		FFlightInput In;
+		In.bGlide = true;
+		In.AimDirection = FVec3(0.0, 0.0, 1.0);
+		Step(S, In, P, FVec3(), FrameDt);
+		CHECK(IsFiniteState(S));
+		CHECK(std::fabs(Dot(S.Forward, S.Up)) < 1e-6);
+		CHECK(S.GetRight().Size() == doctest::Approx(1.0));
+	}
+	SUBCASE("NaN wind")
+	{
+		FFlightState S = CruiseState(12.0, 300.0);
+		FFlightInput In;
+		In.bGlide = true;
+		Step(S, In, P, FVec3(NaN, 0.0, 0.0), FrameDt);
+		CHECK(IsFiniteState(S));
+	}
+	SUBCASE("NaN velocity and orientation")
+	{
+		FFlightState S = CruiseState(12.0, 300.0);
+		S.Velocity = FVec3(NaN, 1.0, 0.0);
+		S.Forward = FVec3(NaN, 0.0, 0.0);
+		S.BankRad = NaN;
+		S.WingExtension = NaN;
+		FFlightInput In;
+		Step(S, In, P, FVec3(), FrameDt);
+		CHECK(IsFiniteState(S));
+	}
+}
+
+TEST_CASE("SanitizeParams makes zero or negative tunables safe")
+{
+	FFlightParams P;
+	P.MaxSubstepSec = 0.0;
+	P.StallFalloffRad = 0.0;
+	P.MassKg = 0.0;
+	P.LiftSlopePerRad = 0.0;
+	P.FlapFrequencyHz = -1.0;
+	SanitizeParams(P);
+	FFlightState S = CruiseState(12.0, 300.0);
+	FFlightInput In;
+	In.bGlide = true;
+	In.AimDirection = DirFromPitchYawDeg(GetStallAngleRad(P) * 180.0 / Pi, 0.0);
+	for (int i = 0; i < 120; ++i)
+	{
+		Step(S, In, P, FVec3(), FrameDt);
+	}
+	CHECK(IsFiniteState(S));
+}
+
+TEST_CASE("UpdateVelocityAndOrientation + caller-side move matches Step (the CMC integration path)")
+{
+	const FFlightParams P;
+	FFlightState A = CruiseState(12.0, 300.0);
+	FFlightState B = A;
+	FFlightInput In;
+	In.bFlap = true;
+	In.AimDirection = DirFromPitchYawDeg(10.0, 45.0);
+	const double H = P.MaxSubstepSec;
+	for (int i = 0; i < 240; ++i)
+	{
+		Step(A, In, P, FVec3(), H);
+		UpdateVelocityAndOrientation(B, In, P, FVec3(), H);
+		B.Position += B.Velocity * H; // what the CMC sweep does when nothing is hit
+	}
+	CHECK(A.Position.X == B.Position.X);
+	CHECK(A.Position.Z == B.Position.Z);
+	CHECK(A.Velocity.Y == B.Velocity.Y);
+}

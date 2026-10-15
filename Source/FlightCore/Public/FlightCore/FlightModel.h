@@ -94,13 +94,24 @@ namespace BirdFlight
 		FVec3 TotalForce;                     // excluding gravity
 	};
 
+	// Clamp tunables to safe ranges (no zero mass/rates/divisors). Call once after loading or
+	// editing params, e.g. from a species data asset.
+	void SanitizeParams(FFlightParams& Params);
+
 	// Aerodynamic coefficient curve (exposed for tests and tuning tools).
 	double ComputeLiftCoeff(const FFlightParams& Params, double AngleOfAttackRad);
 	double GetStallAngleRad(const FFlightParams& Params);
 
+	// One substep for callers that move and collide themselves (the Unreal CharacterMovementComponent
+	// flying mode): updates wings, orientation and velocity but NOT position. The caller then sweeps
+	// Velocity * Dt through the world. Dt should be <= Params.MaxSubstepSec.
+	FFlightTelemetry UpdateVelocityAndOrientation(FFlightState& State, const FFlightInput& Input,
+		const FFlightParams& Params, const FVec3& Wind, double Dt);
+
 	// Advance the simulation by DeltaSec using constant input and a constant wind velocity
-	// (world frame, m/s). Internally substeps at Params.MaxSubstepSec. Deterministic: the same
-	// state + input + wind + dt always gives the same result.
+	// (world frame, m/s), integrating position with no collision. Internally substeps at
+	// Params.MaxSubstepSec. Deterministic: the same state + input + wind + dt always gives the same
+	// result. Repairs non-finite state/wind instead of propagating NaN.
 	FFlightTelemetry Step(FFlightState& State, const FFlightInput& Input, const FFlightParams& Params,
 		const FVec3& Wind, double DeltaSec);
 }
